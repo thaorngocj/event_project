@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
   Controller,
   Get,
@@ -64,16 +65,28 @@ export class EventsController {
       limits: { fileSize: 10 * 1024 * 1024 },
     }),
   )
-  async importParticipants(@Param('id') id: string, @UploadedFile() file: any) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-    return await this.eventsService.importParticipants(+id, file.buffer);
+  async importParticipants(
+    @Param('id') id: string,
+    @UploadedFile() file: any,
+    @Request() req: any,
+  ) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const fileName = file.originalname;
+    return await this.eventsService.importParticipants(
+      +id,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      file.buffer,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      req.user.id,
+      fileName,
+    );
   }
-  // Export Excel
-  @Get(':id/export')
+
+  // Lấy lịch sử import
+  @Get(':id/import-history')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'EVENT_MANAGER')
-  async exportParticipants(@Param('id') id: string) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-    return await this.eventsService.exportParticipants(+id);
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  async getImportHistory(@Param('id') id: string) {
+    return await this.eventsService.getImportHistory(+id);
   }
 }
