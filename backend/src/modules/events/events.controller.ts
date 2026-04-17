@@ -7,7 +7,11 @@ import {
   Patch,
   Delete,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  Request,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { EventsService } from './events.service';
 import { JwtAuthGuard } from '../../guards/jwt-auth.guard';
 import { RolesGuard } from '../../guards/roles.guard';
@@ -19,17 +23,17 @@ import { UpdateEventDto } from './dto/update-event.dto';
 export class EventsController {
   constructor(private eventsService: EventsService) {}
 
-  // Tất cả đều xem được event, kể cả khách chưa đăng nhập
   @Get()
   findAll() {
     return this.eventsService.findAll();
   }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     console.log('HIT EVENT ID ROUTE', id);
     return this.eventsService.findOne(+id);
   }
-  // chỉ rolesADMIN tạo event
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Post()
@@ -37,7 +41,6 @@ export class EventsController {
     return this.eventsService.create(body);
   }
 
-  // chỉ rolesADMIN sửa event
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Patch(':id')
@@ -45,11 +48,32 @@ export class EventsController {
     return this.eventsService.update(+id, body);
   }
 
-  // chỉ rolesADMIN xóa event
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.eventsService.remove(+id);
+  }
+
+  // Import Excel
+  @Post(':id/import')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
+  async importParticipants(@Param('id') id: string, @UploadedFile() file: any) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+    return await this.eventsService.importParticipants(+id, file.buffer);
+  }
+  // Export Excel
+  @Get(':id/export')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'EVENT_MANAGER')
+  async exportParticipants(@Param('id') id: string) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+    return await this.eventsService.exportParticipants(+id);
   }
 }

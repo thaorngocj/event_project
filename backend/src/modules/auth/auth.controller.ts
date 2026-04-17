@@ -1,4 +1,10 @@
-import { Controller, Post, Body, HttpCode } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
@@ -15,6 +21,16 @@ export class AuthController {
   @HttpCode(200)
   async login(@Body() body: LoginDto) {
     return this.authService.login(body.email, body.password);
+  }
+
+  // Thêm endpoint refresh token mới
+  @Post('refresh')
+  @HttpCode(200)
+  async refresh(@Body('refreshToken') refreshToken: string) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token required');
+    }
+    return await this.authService.refreshToken(refreshToken);
   }
 
   // Chỉ superadmin tạo user
