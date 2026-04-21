@@ -39,14 +39,24 @@ export class EventsController {
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Post()
   create(@Body() body: CreateEventDto) {
-    return this.eventsService.create(body);
+    const eventData = {
+      ...body,
+      startDate: new Date(body.startDate),
+      endDate: new Date(body.endDate),
+    };
+    return this.eventsService.create(eventData);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: UpdateEventDto) {
-    return this.eventsService.update(+id, body);
+    const updateData: any = { ...body };
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    if (body.startDate) updateData.startDate = new Date(body.startDate);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    if (body.endDate) updateData.endDate = new Date(body.endDate);
+    return this.eventsService.update(+id, updateData);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -88,5 +98,14 @@ export class EventsController {
   @Roles('ADMIN', 'SUPER_ADMIN')
   async getImportHistory(@Param('id') id: string) {
     return await this.eventsService.getImportHistory(+id);
+  }
+
+  // Export Excel
+  @Get(':id/export')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'EVENT_MANAGER')
+  async exportParticipants(@Param('id') id: string) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+    return await this.eventsService.exportParticipants(+id);
   }
 }

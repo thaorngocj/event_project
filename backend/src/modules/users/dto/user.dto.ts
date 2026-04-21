@@ -13,7 +13,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { User } from '../user.entity';
 
 // Create (admin/super admin only)
-
 export class CreateUserDto {
   @ApiProperty({ example: 'sv001' })
   @IsString()
@@ -40,7 +39,6 @@ export class CreateUserDto {
 }
 
 // Update role (admin only)
-
 export class UpdateRoleDto {
   @ApiProperty({ enum: ['STUDENT', 'EVENT_MANAGER', 'ADMIN', 'SUPER_ADMIN'] })
   @IsEnum(['STUDENT', 'EVENT_MANAGER', 'ADMIN', 'SUPER_ADMIN'])
@@ -48,7 +46,6 @@ export class UpdateRoleDto {
 }
 
 // Update profile (self or admin)
-
 export class UpdateUserDto {
   @ApiPropertyOptional({ example: 'sv001_new' })
   @IsOptional()
@@ -61,10 +58,15 @@ export class UpdateUserDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  @ApiPropertyOptional({ example: 'NewPass@123', minLength: 6 })
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  password?: string;
 }
 
 // Query / pagination (admin only)
-
 export class QueryUsersDto {
   @ApiPropertyOptional({ description: 'Tìm theo tên hoặc email' })
   @IsOptional()

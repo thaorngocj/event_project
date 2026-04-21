@@ -14,10 +14,10 @@ export class CreateEventDto {
   location!: string;
 
   @IsDateString()
-  startTime!: string;
+  startDate!: string;
 
   @IsDateString()
-  endTime!: string;
+  endDate!: string;
 
   @IsOptional()
   @IsIn(['UPCOMING', 'OPEN', 'CLOSED'])

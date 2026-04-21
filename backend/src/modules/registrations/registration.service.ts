@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Registration } from './registration.entity';
 import { Event } from '../events/event.entity';
+import { User } from '../users/user.entity';
 
 @Injectable()
 export class RegistrationService {
@@ -17,6 +18,8 @@ export class RegistrationService {
     private repo: Repository<Registration>,
     @InjectRepository(Event)
     private eventRepo: Repository<Event>,
+    @InjectRepository(User)
+    private userRepo: Repository<User>,
   ) {}
 
   async register(userId: number, eventId: number) {
@@ -31,24 +34,29 @@ export class RegistrationService {
     const existing = await this.repo.findOne({ where: { userId, eventId } });
     if (existing) throw new ConflictException('Đã đăng ký rồi');
 
-    // Tạo QR code
-    const qrData = JSON.stringify({
-      userId,
-      eventId,
-      registrationId: Date.now(),
-    });
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
-    const qrCode = await toDataURL(qrData);
-
+    // Tạo registration TRƯỚC để có ID thật
     const registration = this.repo.create({
       userId,
       eventId,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      qrCode,
       status: 'REGISTERED',
     });
 
-    return this.repo.save(registration);
+    const savedRegistration = await this.repo.save(registration);
+
+    // Tạo QR code với ID THẬT từ database
+    const qrData = JSON.stringify({
+      userId,
+      eventId,
+      registrationId: savedRegistration.id, // Dùng ID thật
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+    const qrCode = await toDataURL(qrData);
+
+    // Cập nhật QR code vào registration
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    savedRegistration.qrCode = qrCode;
+    return this.repo.save(savedRegistration);
   }
 
   async checkIn(
@@ -56,11 +64,22 @@ export class RegistrationService {
     qrData: string,
     checkedBy: number,
   ): Promise<Registration> {
-    const parsed = JSON.parse(qrData) as {
-      userId: number;
-      registrationId: number;
-    };
-    const { userId, registrationId } = parsed;
+    let userId: number;
+    let registrationId: number;
+
+    try {
+      const parsed = JSON.parse(qrData) as {
+        userId: number;
+        registrationId: number;
+      };
+      userId = parsed.userId;
+      registrationId = parsed.registrationId;
+    } catch (error) {
+      console.error('Invalid QR data:', error);
+      throw new BadRequestException('QR code không hợp lệ');
+    }
+
+    console.log('Check-in info:', { registrationId, eventId, userId });
 
     const registration = await this.repo.findOne({
       where: {
@@ -81,11 +100,10 @@ export class RegistrationService {
     return this.repo.save(registration);
   }
 
-  // THÊM METHOD NÀY
   async getUserRegistrations(userId: number) {
     const registrations = await this.repo.find({
       where: { userId },
-      relations: ['event'], // Lấy thông tin event
+      relations: ['event'],
       order: { registeredAt: 'DESC' },
     });
 
@@ -99,5 +117,46 @@ export class RegistrationService {
       checkedInAt: reg.checkedInAt,
       qrCode: reg.qrCode,
     }));
+  }
+
+  async cancelRegistration(registrationId: number, userId: number) {
+    const registration = await this.repo.findOne({
+      where: { id: registrationId, userId },
+      relations: ['event'],
+    });
+
+    if (!registration) throw new NotFoundException('Không tìm thấy đăng ký');
+
+    const eventStartDate = new Date(registration.event.startDate);
+    const now = new Date();
+
+    if (now >= eventStartDate) {
+      throw new BadRequestException('Không thể hủy sau khi sự kiện đã bắt đầu');
+    }
+
+    if (registration.status === 'CHECKED_IN') {
+      throw new BadRequestException('Không thể hủy vì đã check-in');
+    }
+
+    registration.status = 'CANCELLED';
+    return this.repo.save(registration);
+  }
+
+  async manualCheckIn(eventId: number, email: string, checkedBy: number) {
+    const user = await this.userRepo.findOne({ where: { email } });
+    if (!user) throw new NotFoundException('Không tìm thấy sinh viên');
+
+    const registration = await this.repo.findOne({
+      where: { userId: user.id, eventId },
+    });
+    if (!registration) throw new NotFoundException('Sinh viên chưa đăng ký');
+    if (registration.status === 'CHECKED_IN')
+      throw new BadRequestException('Đã check-in rồi');
+
+    registration.status = 'CHECKED_IN';
+    registration.checkedInAt = new Date();
+    registration.checkedBy = checkedBy;
+
+    return this.repo.save(registration);
   }
 }

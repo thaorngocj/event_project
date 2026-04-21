@@ -6,6 +6,7 @@ import {
   Request,
   Param,
   Get,
+  Delete,
 } from '@nestjs/common';
 import { RegistrationService } from './registration.service';
 import { JwtAuthGuard } from '../../guards/jwt-auth.guard';
@@ -34,12 +35,14 @@ export class RegistrationController {
   @Roles('EVENT_MANAGER', 'ADMIN', 'SUPER_ADMIN')
   async checkIn(
     @Param('eventId') eventId: string,
-    @Body('qrData') qrData: string,
+    @Body('qrData') qrData: any,
     @Request() req: { user: { id: number } },
   ) {
+    const qrDataString =
+      typeof qrData === 'string' ? qrData : JSON.stringify(qrData);
     return await this.registrationService.checkIn(
       +eventId,
-      qrData,
+      qrDataString,
       req.user.id,
     );
   }
@@ -48,5 +51,25 @@ export class RegistrationController {
   @Roles('STUDENT')
   async getMyEvents(@Request() req: { user: { id: number } }) {
     return await this.registrationService.getUserRegistrations(req.user.id);
+  }
+
+  @Delete(':id/cancel')
+  @Roles('STUDENT')
+  async cancelRegistration(
+    @Param('id') id: string,
+    @Request() req: { user: { id: number } },
+  ) {
+    return await this.registrationService.cancelRegistration(+id, req.user.id);
+  }
+
+  @Post('events/:eventId/manual-checkin')
+  @Roles('EVENT_MANAGER', 'ADMIN', 'SUPER_ADMIN')
+  async manualCheckIn(
+    @Param('eventId') eventId: string,
+    @Body('email') email: string,
+    @Request() req: any,
+  ) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+    return this.registrationService.manualCheckIn(+eventId, email, req.user.id);
   }
 }

@@ -33,7 +33,8 @@ export class UsersService {
   private strip(user: User): Omit<User, 'password'> {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...safe } = user;
-    return safe;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+    return safe as any;
   }
 
   private async assertNotDuplicate(

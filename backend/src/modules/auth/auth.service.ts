@@ -57,19 +57,4 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
-
-  async register(userData: {
-    email: string;
-    username: string;
-    password: string;
-    role?: 'STUDENT' | 'EVENT_MANAGER' | 'ADMIN' | 'SUPER_ADMIN';
-  }) {
-    const user = await this.usersService.createUser(userData);
-    return {
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      role: user.role,
-    };
-  }
 }

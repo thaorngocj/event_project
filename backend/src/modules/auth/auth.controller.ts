@@ -6,12 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
-import { Roles } from '../../decorators/roles.decorator';
-import { RolesGuard } from '../../guards/roles.guard';
-import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../../guards/jwt-auth.guard';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('auth')
@@ -39,18 +34,5 @@ export class AuthController {
       throw new UnauthorizedException('Refresh token required');
     }
     return await this.authService.refreshToken(refreshToken);
-  }
-
-  // Chỉ superadmin tạo user
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SUPER_ADMIN')
-  @Post('register')
-  async register(@Body() body: CreateUserDto) {
-    return this.authService.register({
-      email: body.email,
-      username: body.username,
-      password: body.password,
-      role: body.role,
-    });
   }
 }

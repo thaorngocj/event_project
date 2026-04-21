@@ -39,8 +39,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   // SUPER_ADMIN: tạo user thủ công
-
-  @Post()
+  @Post('create')
   @Roles('SUPER_ADMIN')
   @ApiOperation({ summary: '[SUPER_ADMIN] Tạo user mới' })
   @ApiResponse({ status: 201, description: 'User đã được tạo' })
@@ -50,7 +49,6 @@ export class UsersController {
   }
 
   // SUPER_ADMIN / ADMIN: danh sách + tìm kiếm
-
   @Get()
   @Roles('SUPER_ADMIN', 'ADMIN')
   @ApiOperation({
@@ -61,7 +59,6 @@ export class UsersController {
   }
 
   // Xem profile của chính mình
-
   @Get('me')
   @ApiOperation({ summary: 'Xem profile của user đang đăng nhập' })
   getMe(@Request() req: { user: { id: number } }) {
@@ -78,7 +75,6 @@ export class UsersController {
   }
 
   // User tự cập nhật profile của mình
-
   @Patch('me')
   @ApiOperation({ summary: 'Cập nhật username/email của chính mình' })
   updateMe(
@@ -88,8 +84,26 @@ export class UsersController {
     return this.usersService.updateUser(req.user.id, dto);
   }
 
-  // SUPER_ADMIN: đổi role
+  // SUPER_ADMIN: cập nhật profile user
+  @Patch(':id')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: '[SUPER_ADMIN] Cập nhật thông tin user bất kỳ' })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID của user cần cập nhật',
+  })
+  @ApiResponse({ status: 200, description: 'Cập nhật thành công' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy user' })
+  @ApiResponse({ status: 409, description: 'Email hoặc username đã tồn tại' })
+  async updateUserByAdmin(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateUserDto,
+  ) {
+    return this.usersService.updateUser(id, dto);
+  }
 
+  // SUPER_ADMIN: đổi role
   @Patch(':id/role')
   @Roles('SUPER_ADMIN')
   @ApiOperation({ summary: '[SUPER_ADMIN] Thay đổi role của user' })
@@ -102,7 +116,6 @@ export class UsersController {
   }
 
   // SUPER_ADMIN: disable / enable user
-
   @Patch(':id/deactivate')
   @Roles('SUPER_ADMIN')
   @ApiOperation({ summary: '[SUPER_ADMIN] Vô hiệu hoá tài khoản' })
