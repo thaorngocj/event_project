@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: nest_backend
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      PORT: 3000
+    restart: on-failure
+
+  client-superadmin:
+    build: ./client-superadmin
+    container_name: next_superadmin
+    ports:
+      - "3001:3001"
+    environment:
+      NEXT_PUBLIC_API_URL: https://uncross-fasting-abridge.ngrok-free.dev/api/v1
+    restart: on-failure
+
+  client-customer:
+    build: ./client-customer
+    container_name: next_customer
+    ports:
+      - "3002:3002"
+    environment:
+      NEXT_PUBLIC_API_URL: https://uncross-fasting-abridge.ngrok-free.dev/api/v1
+    restart: on-failure
+
+volumes:
+  postgres_data:
