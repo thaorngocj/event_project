@@ -13,11 +13,14 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+<<<<<<< HEAD
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
+=======
+>>>>>>> c9e40c93c122d1a3943dd653c854b2025a7c4210
 
   backend:
     build: ./backend
@@ -25,6 +28,7 @@ services:
     ports:
       - "3000:3000"
     depends_on:
+<<<<<<< HEAD
       db:
         condition: service_healthy
     environment:
@@ -55,6 +59,15 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: https://uncross-fasting-abridge.ngrok-free.dev/api/v1
     restart: on-failure
+=======
+      - db
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app:cached
+      - /app/node_modules
+    command: npm run start:dev
+>>>>>>> c9e40c93c122d1a3943dd653c854b2025a7c4210
 
 volumes:
   postgres_data:
