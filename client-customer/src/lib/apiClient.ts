@@ -28,10 +28,11 @@ async function request<T>(
   options: RequestInit = {},
   withAuth = true,
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
-  };
+const headers: Record<string, string> = {
+  'Content-Type': 'application/json',
+  'ngrok-skip-browser-warning': 'true',  // ← THÊM DÒNG NÀY
+  ...(options.headers as Record<string, string>),
+};
 
   if (withAuth) {
     const token = tokenStorage.getAccess();
