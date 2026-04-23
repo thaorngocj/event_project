@@ -2,7 +2,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Event } from './event.entity';
+import { Event, DisplayCategory, EventCategory, Scale } from './event.entity';
 import { ImportHistory } from './history.event.entity';
 import { Registration } from '../registrations/registration.entity';
 import { User } from '../users/user.entity';
@@ -22,7 +22,12 @@ export class EventsService {
   ) {}
 
   create(data: Partial<Event>) {
-    const event = this.repo.create(data);
+    const event = this.repo.create({
+      ...data,
+      displayCategory: data.displayCategory ?? DisplayCategory.NORMAL,
+      eventCategory: data.eventCategory ?? EventCategory.ACADEMIC,
+      scale: data.scale ?? Scale.SCHOOL,
+    });
     return this.repo.save(event);
   }
 
@@ -47,15 +52,14 @@ export class EventsService {
     await this.repo.delete(id);
     return { message: 'Deleted' };
   }
-   // Import
+
+  // Import
   async importParticipants(eventId: number, fileBuffer: Buffer, importedBy: number, fileName: string) {
-    // Kiểm tra event tồn tại
     const event = await this.findOne(eventId);
     if (!event) {
       throw new NotFoundException('Event not found');
     }
 
-    // Đọc file Excel
     let data: any[] = [];
     try {
       const workbook = XLSX.read(fileBuffer);
@@ -83,7 +87,6 @@ export class EventsService {
         continue;
       }
 
-      // Tìm user theo email
       const user = await this.userRepo.findOne({ where: { email } });
       if (!user) {
         failedCount++;
@@ -91,7 +94,6 @@ export class EventsService {
         continue;
       }
 
-      // Kiểm tra đã đăng ký chưa
       const existing = await this.registrationRepo.findOne({
         where: { userId: user.id, eventId }
       });
@@ -102,7 +104,6 @@ export class EventsService {
         continue;
       }
 
-      // Tạo registration
       const registration = this.registrationRepo.create({
         userId: user.id,
         eventId: eventId,
@@ -115,7 +116,6 @@ export class EventsService {
       successCount++;
     }
 
-    // Lưu lịch sử import
     const importHistory = this.importHistoryRepo.create({
       eventId,
       importedBy,
@@ -123,7 +123,7 @@ export class EventsService {
       totalRows: data.length,
       successCount,
       failedCount,
-      errors: errors.slice(0, 10).join('; '), // Chỉ lưu 10 lỗi đầu
+      errors: errors.slice(0, 10).join('; '),
     });
     await this.importHistoryRepo.save(importHistory);
 
@@ -133,11 +133,10 @@ export class EventsService {
       eventTitle: event.title,
       successCount,
       failedCount,
-      errors: errors.slice(0, 20), // Trả về 20 lỗi đầu
+      errors: errors.slice(0, 20),
     };
   }
 
-  // Lấy lịch sử import của event
   async getImportHistory(eventId: number) {
     const history = await this.importHistoryRepo.find({
       where: { eventId },
@@ -157,7 +156,6 @@ export class EventsService {
     }));
   }
 
-  // Export
   async exportParticipants(eventId: number) {
     const event = await this.findOne(eventId);
     if (!event) {

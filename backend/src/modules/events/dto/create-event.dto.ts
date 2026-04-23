@@ -4,7 +4,10 @@ import {
   IsOptional,
   IsIn,
   IsNumber,
+  IsString,
+  IsEnum,
 } from 'class-validator';
+import { DisplayCategory, EventCategory, Scale } from '../event.entity';
 
 export class CreateEventDto {
   @IsNotEmpty()
@@ -26,4 +29,28 @@ export class CreateEventDto {
   @IsOptional()
   @IsNumber()
   maxParticipants?: number;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @IsOptional()
+  @IsEnum(DisplayCategory)
+  displayCategory?: DisplayCategory;
+
+  @IsOptional()
+  @IsEnum(EventCategory)
+  eventCategory?: EventCategory;
+
+  @IsOptional()
+  @IsEnum(Scale)
+  scale?: Scale;
+
+  @IsOptional()
+  @IsString()
+  faculty?: string;
 }
