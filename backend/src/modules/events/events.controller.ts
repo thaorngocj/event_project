@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Request,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { EventsService } from './events.service';
@@ -19,6 +20,14 @@ import { RolesGuard } from '../../guards/roles.guard';
 import { Roles } from '../../decorators/roles.decorator';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { Query } from '@nestjs/common';
+import { CalendarQueryDto } from './dto/calendar-query.dto';
+
+interface AuthRequest extends Request {
+  user: {
+    id: number;
+  };
+}
 
 @Controller('events')
 export class EventsController {
@@ -27,6 +36,10 @@ export class EventsController {
   @Get()
   findAll() {
     return this.eventsService.findAll();
+  }
+  @Get('calendar')
+  getCalendar(@Query() query: CalendarQueryDto) {
+    return this.eventsService.getCalendarEvents(query);
   }
 
   @Get(':id')
@@ -38,13 +51,19 @@ export class EventsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Post()
-  create(@Body() body: CreateEventDto) {
+  create(@Body() body: CreateEventDto, @Request() req: AuthRequest) {
     const eventData = {
       ...body,
       startDate: new Date(body.startDate),
       endDate: new Date(body.endDate),
+      registrationDeadline: body.registrationDeadline
+        ? new Date(body.registrationDeadline)
+        : undefined,
     };
-    return this.eventsService.create(eventData);
+    return this.eventsService.create({
+      ...eventData,
+      createdBy: req.user.id,
+    });
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -56,6 +75,9 @@ export class EventsController {
     if (body.startDate) updateData.startDate = new Date(body.startDate);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     if (body.endDate) updateData.endDate = new Date(body.endDate);
+    if (body.registrationDeadline)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      updateData.registrationDeadline = new Date(body.registrationDeadline);
     return this.eventsService.update(+id, updateData);
   }
 
@@ -73,6 +95,12 @@ export class EventsController {
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (req, file, cb) => {
+        if (!file.originalname.match(/\.(xlsx|xls)$/)) {
+          return cb(new BadRequestException('Chỉ cho phép file Excel'), false);
+        }
+        cb(null, true);
+      },
     }),
   )
   async importParticipants(

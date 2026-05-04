@@ -2,18 +2,32 @@ import {
   IsNotEmpty,
   IsDateString,
   IsOptional,
-  IsIn,
   IsNumber,
   IsString,
   IsEnum,
+  IsArray,
+  IsEmail,
+  MaxLength,
+  Min,
 } from 'class-validator';
-import { DisplayCategory, EventCategory, Scale } from '../event.entity';
+import {
+  DisplayCategory,
+  EventCategory,
+  Scale,
+  EventStatus,
+} from '../event.entity';
 
 export class CreateEventDto {
   @IsNotEmpty()
+  @MaxLength(255)
   title!: string;
 
+  @IsOptional()
+  @IsString()
+  description?: string;
+
   @IsNotEmpty()
+  @MaxLength(500)
   location!: string;
 
   @IsDateString()
@@ -23,20 +37,12 @@ export class CreateEventDto {
   endDate!: string;
 
   @IsOptional()
-  @IsIn(['UPCOMING', 'OPEN', 'CLOSED'])
-  status?: 'UPCOMING' | 'OPEN' | 'CLOSED';
+  @IsDateString()
+  registrationDeadline?: string;
 
   @IsOptional()
-  @IsNumber()
-  maxParticipants?: number;
-
-  @IsOptional()
-  @IsString()
-  description?: string;
-
-  @IsOptional()
-  @IsString()
-  imageUrl?: string;
+  @IsEnum(EventStatus)
+  status?: EventStatus;
 
   @IsOptional()
   @IsEnum(DisplayCategory)
@@ -53,4 +59,34 @@ export class CreateEventDto {
   @IsOptional()
   @IsString()
   faculty?: string;
+
+  @IsOptional()
+  @IsString()
+  organizer?: string;
+
+  @IsOptional()
+  @IsEmail()
+  contactEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  contactPhone?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  maxParticipants?: number;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  bannerUrl?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
 }

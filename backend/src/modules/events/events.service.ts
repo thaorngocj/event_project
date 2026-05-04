@@ -1,12 +1,27 @@
 /* eslint-disable */
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable, NotFoundException, BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Event, DisplayCategory, EventCategory, Scale } from './event.entity';
+import { Repository, Between, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
+import { Cron} from '@nestjs/schedule';
+import { Event, EventStatus, EventCategory } from './event.entity';
 import { ImportHistory } from './history.event.entity';
 import { Registration } from '../registrations/registration.entity';
 import { User } from '../users/user.entity';
+import { CalendarQueryDto } from './dto/calendar-query.dto';
 import * as XLSX from 'xlsx';
+
+// Map màu cho frontend calendar
+export const EVENT_CATEGORY_COLORS: Record<EventCategory, string> = {
+  [EventCategory.ACADEMIC]:  '#4A90D9', // xanh dương
+  [EventCategory.CULTURE]:   '#F4A7B9', // hồng
+  [EventCategory.SPORT]:     '#F5A623', // cam
+  [EventCategory.COMMUNITY]: '#7ED321', // xanh lá
+  [EventCategory.NATIONAL]:  '#D0021B', // đỏ
+  [EventCategory.SCHOOL]:    '#FF6B35', // cam đậm
+  [EventCategory.SEMINAR]:   '#50E3C2', // xanh ngọc
+};
 
 @Injectable()
 export class EventsService {
@@ -21,29 +36,113 @@ export class EventsService {
     private userRepo: Repository<User>,
   ) {}
 
+  // ── CRON: Tự động cập nhật status ───────────────────────────────
+
+  /**
+   * Chạy mỗi 15 phút
+   * UPCOMING  → ONGOING  khi đến giờ bắt đầu
+   * ONGOING   → CLOSED   khi hết giờ
+   * UPCOMING  → CLOSED   nếu bị bỏ qua (server downtime)
+   */
+  @Cron('0 */15 * * * *', { name: 'auto-update-event-status' })
+  async autoUpdateEventStatus() {
+    const now = new Date();
+
+    // UPCOMING/OPEN → ONGOING (đã đến giờ bắt đầu, chưa kết thúc)
+    await this.repo
+      .createQueryBuilder()
+      .update(Event)
+      .set({ status: EventStatus.ONGOING })
+      .where(
+        'startDate <= :now AND endDate > :now AND status IN (:...statuses) AND isCancelled = false',
+        { now, statuses: [EventStatus.UPCOMING, EventStatus.OPEN] },
+      )
+      .execute();
+
+    // UPCOMING/OPEN/ONGOING → CLOSED (đã hết giờ)
+    await this.repo
+      .createQueryBuilder()
+      .update(Event)
+      .set({ status: EventStatus.CLOSED })
+      .where(
+        'endDate <= :now AND status NOT IN (:...statuses) AND isCancelled = false',
+        { now, statuses: [EventStatus.CLOSED, EventStatus.CANCELLED, EventStatus.DRAFT] },
+      )
+      .execute();
+  }
+
+  // ── CRUD cơ bản ─────────────────────────────────────────────────
+
   create(data: Partial<Event>) {
+    if (!data.startDate || !data.endDate) {
+      throw new BadRequestException('Thiếu startDate hoặc endDate');
+    }
+
+    const startDate = new Date(data.startDate);
+    const endDate   = new Date(data.endDate);
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      throw new BadRequestException('Ngày không hợp lệ');
+    }
+
+    if (startDate >= endDate) {
+      throw new BadRequestException('startDate phải trước endDate');
+    }
+
+    let registrationDeadline: Date | null = null;
+
+    if (data.registrationDeadline) {
+      const parsed = new Date(data.registrationDeadline);
+
+      if (isNaN(parsed.getTime())) {
+        throw new BadRequestException('registrationDeadline không hợp lệ');
+      }
+
+      if (parsed > startDate) {
+        throw new BadRequestException('registrationDeadline phải trước startDate');
+      }
+
+      registrationDeadline = parsed;
+    }
+
     const event = this.repo.create({
       ...data,
-      displayCategory: data.displayCategory ?? DisplayCategory.NORMAL,
-      eventCategory: data.eventCategory ?? EventCategory.ACADEMIC,
-      scale: data.scale ?? Scale.SCHOOL,
+      startDate,
+      endDate,
+      registrationDeadline, 
+      displayCategory: data.displayCategory ?? 'NORMAL' as any,
+      eventCategory: data.eventCategory ?? 'ACADEMIC' as any,
+      scale: data.scale ?? 'SCHOOL' as any,
+      status: data.status ?? EventStatus.UPCOMING,
     });
+
     return this.repo.save(event);
   }
 
   findAll() {
-    return this.repo.find();
+    return this.repo.find({ order: { startDate: 'ASC' } });
   }
 
   async findOne(id: number) {
     const event = await this.repo.findOne({ where: { id } });
-    if (!event) {
-      throw new NotFoundException('Event not found');
-    }
+    if (!event) throw new NotFoundException('Event not found');
     return event;
   }
 
   async update(id: number, data: Partial<Event>) {
+    const existing = await this.findOne(id);
+
+    const start = data.startDate ?? existing.startDate;
+    const end = data.endDate ?? existing.endDate;
+    const deadline = data.registrationDeadline ?? existing.registrationDeadline;
+
+    if (start >= end) {
+      throw new BadRequestException('startDate phải trước endDate');
+    }
+
+    if (deadline && deadline > start) {
+      throw new BadRequestException('registrationDeadline phải trước startDate');
+    }
     await this.repo.update(id, data);
     return this.findOne(id);
   }
@@ -53,34 +152,99 @@ export class EventsService {
     return { message: 'Deleted' };
   }
 
-  // Import
-  async importParticipants(eventId: number, fileBuffer: Buffer, importedBy: number, fileName: string) {
-    const event = await this.findOne(eventId);
-    if (!event) {
-      throw new NotFoundException('Event not found');
+  // ── CALENDAR ENDPOINT ────────────────────────────────────────────
+
+  /**
+   * Trả về events theo tháng, format sẵn cho react-big-calendar / FullCalendar
+   * Query: GET /events/calendar?year=2026&month=4&category=ACADEMIC
+   */
+  async getCalendarEvents(query: CalendarQueryDto) {
+    const now    = new Date();
+    const year   = query.year  ?? now.getFullYear();
+    const month  = query.month ?? now.getMonth() + 1; // 1-based
+
+    // Lấy toàn bộ tháng (thêm padding 1 tuần trước/sau cho lịch hiển thị đúng)
+    const startOfView = new Date(year, month - 2, 24); // cuối tháng trước
+    const endOfView   = new Date(year, month, 7);       // đầu tháng sau
+
+    const qb = this.repo
+      .createQueryBuilder('event')
+      .where(
+        // Lấy event có bất kỳ phần nào trong khoảng view
+        'event.startDate < :endOfView AND event.endDate > :startOfView',
+        { startOfView, endOfView },
+      )
+      .andWhere('event.status != :draft', { draft: EventStatus.DRAFT })
+      .orderBy('event.startDate', 'ASC');
+
+    if (query.category) {
+      qb.andWhere('event.eventCategory = :category', { category: query.category });
     }
+
+    const events = await qb.getMany();
+
+    return {
+      year,
+      month,
+      // Metadata cho frontend render legend
+      categoryColors: EVENT_CATEGORY_COLORS,
+      events: events.map(e => this.toCalendarItem(e)),
+    };
+  }
+
+  /** Format 1 event thành shape mà react-big-calendar / FullCalendar hiểu */
+  private toCalendarItem(e: Event) {
+    return {
+      id:            e.id,
+      title:         e.title,
+      start:         e.startDate,          // Date object / ISO string
+      end:           e.endDate,
+      location:      e.location,
+      status:        e.status,
+      category:      e.eventCategory,
+      color:         EVENT_CATEGORY_COLORS[e.eventCategory],
+      displayCategory: e.displayCategory,
+      organizer:     e.organizer,
+      faculty:       e.faculty,
+      imageUrl:      e.imageUrl,
+      maxParticipants:   e.maxParticipants,
+      registeredCount:   e.registeredCount,
+      isFull:        e.isFull,
+      isRegistrationOpen: e.isRegistrationOpen,
+      registrationDeadline: e.registrationDeadline,
+      tags:          e.tags,
+    };
+  }
+
+  // ── IMPORT / EXPORT (giữ nguyên từ code cũ, đã improve) ─────────
+
+  async importParticipants(
+    eventId: number,
+    fileBuffer: Buffer,
+    importedBy: number,
+    fileName: string,
+  ) {
+    const event = await this.findOne(eventId);
 
     let data: any[] = [];
     try {
       const workbook = XLSX.read(fileBuffer);
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      data = XLSX.utils.sheet_to_json(sheet);
-    } catch (error) {
+      const sheet    = workbook.Sheets[workbook.SheetNames[0]];
+      data           = XLSX.utils.sheet_to_json(sheet);
+    } catch {
       throw new BadRequestException('File Excel không đúng định dạng');
     }
 
-    if (data.length === 0) {
-      throw new BadRequestException('File không có dữ liệu');
-    }
+    if (data.length === 0) throw new BadRequestException('File không có dữ liệu');
 
     let successCount = 0;
-    let failedCount = 0;
+    let failedCount  = 0;
     const errors: string[] = [];
 
     for (let i = 0; i < data.length; i++) {
-      const row = data[i];
+      const row   = data[i];
       const email = row.email || row.Email;
-      
+
       if (!email) {
         failedCount++;
         errors.push(`Dòng ${i + 2}: Thiếu email`);
@@ -95,9 +259,8 @@ export class EventsService {
       }
 
       const existing = await this.registrationRepo.findOne({
-        where: { userId: user.id, eventId }
+        where: { userId: user.id, eventId },
       });
-
       if (existing) {
         failedCount++;
         errors.push(`Dòng ${i + 2}: ${email} đã đăng ký rồi`);
@@ -106,81 +269,75 @@ export class EventsService {
 
       const registration = this.registrationRepo.create({
         userId: user.id,
-        eventId: eventId,
+        eventId,
         status: 'CHECKED_IN',
         checkedInAt: new Date(),
-        checkedBy: importedBy,
+        checkedBy:   importedBy,
       });
-      
       await this.registrationRepo.save(registration);
+
+      // Cập nhật registeredCount
+      await this.repo.increment({ id: eventId }, 'registeredCount', 1);
+
       successCount++;
     }
 
-    const importHistory = this.importHistoryRepo.create({
-      eventId,
-      importedBy,
-      fileName,
-      totalRows: data.length,
-      successCount,
-      failedCount,
-      errors: errors.slice(0, 10).join('; '),
+    const history = this.importHistoryRepo.create({
+      eventId, importedBy, fileName,
+      totalRows:    data.length,
+      successCount, failedCount,
+      errors:       errors.slice(0, 10).join('; '),
     });
-    await this.importHistoryRepo.save(importHistory);
+    await this.importHistoryRepo.save(history);
 
     return {
-      message: `Import hoàn tất: ${successCount} thành công, ${failedCount} thất bại`,
+      message:      `Import hoàn tất: ${successCount} thành công, ${failedCount} thất bại`,
       eventId,
-      eventTitle: event.title,
-      successCount,
-      failedCount,
-      errors: errors.slice(0, 20),
+      eventTitle:   event.title,
+      successCount, failedCount,
+      errors:       errors.slice(0, 20),
     };
   }
 
   async getImportHistory(eventId: number) {
     const history = await this.importHistoryRepo.find({
-      where: { eventId },
+      where:     { eventId },
       relations: ['user'],
-      order: { importedAt: 'DESC' },
+      order:     { importedAt: 'DESC' },
     });
-
     return history.map(h => ({
-      id: h.id,
-      fileName: h.fileName,
-      importedBy: h.user?.username,
-      importedAt: h.importedAt,
-      totalRows: h.totalRows,
+      id:           h.id,
+      fileName:     h.fileName,
+      importedBy:   h.user?.username,
+      importedAt:   h.importedAt,
+      totalRows:    h.totalRows,
       successCount: h.successCount,
-      failedCount: h.failedCount,
-      errors: h.errors,
+      failedCount:  h.failedCount,
+      errors:       h.errors,
     }));
   }
 
   async exportParticipants(eventId: number) {
     const event = await this.findOne(eventId);
-    if (!event) {
-      throw new NotFoundException('Event not found');
-    }
 
     const registrations = await this.registrationRepo.find({
-      where: { eventId },
+      where:     { eventId },
       relations: ['user'],
     });
 
-    const data = registrations.map(reg => ({
-      'STT': reg.id,
-      'Họ tên': reg.user?.username || 'N/A',
-      'Email': reg.user?.email || 'N/A',
-      'Trạng thái': reg.status === 'CHECKED_IN' ? 'Đã tham gia' : 'Đã đăng ký',
+    const data = registrations.map((reg, idx) => ({
+      'STT':               idx + 1,
+      'Họ tên':            reg.user?.username || 'N/A',
+      'Email':             reg.user?.email    || 'N/A',
+      'Trạng thái':        reg.status === 'CHECKED_IN' ? 'Đã tham gia' : 'Đã đăng ký',
       'Thời gian đăng ký': reg.registeredAt,
       'Thời gian check-in': reg.checkedInAt || 'Chưa check-in',
-      'Người check-in': reg.checkedBy || 'N/A',
+      'Người check-in':    reg.checkedBy    || 'N/A',
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
+    const workbook  = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Participants');
-
     return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
   }
 }
