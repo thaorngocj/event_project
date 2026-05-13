@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Registration } from './registration.entity';
 import { Event } from '../events/event.entity';
+import { EVENT_STATUS } from '../../constants/event.constants';
 import { User } from '../users/user.entity';
 
 @Injectable()
@@ -24,17 +25,48 @@ export class RegistrationService {
 
   async register(userId: number, eventId: number) {
     console.log('Register service - userId:', userId, 'eventId:', eventId);
-    // Kiểm tra event còn mở đăng ký
+
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
-    if (!event || event.status !== 'OPEN') {
-      throw new BadRequestException('Sự kiện không mở đăng ký');
+
+    if (!event) {
+      throw new NotFoundException('Event không tồn tại');
     }
 
-    // Kiểm tra đã đăng ký chưa
-    const existing = await this.repo.findOne({ where: { userId, eventId } });
-    if (existing) throw new ConflictException('Đã đăng ký rồi');
+    if (event.isCancelled) {
+      throw new BadRequestException('Sự kiện đã bị huỷ');
+    }
 
-    // Tạo registration TRƯỚC để có ID thật
+    if (
+      event.registrationDeadline &&
+      new Date() > new Date(event.registrationDeadline)
+    ) {
+      throw new BadRequestException('Đã quá hạn đăng ký');
+    }
+
+    if (
+      event.status === EVENT_STATUS.CLOSED ||
+      event.status === EVENT_STATUS.CANCELLED
+    ) {
+      throw new BadRequestException('Sự kiện đã đóng');
+    }
+
+    if (!event.isRegistrationOpen) {
+      throw new BadRequestException('Đăng ký đã bị tắt');
+    }
+
+    if (
+      event.isFull ||
+      (event.maxParticipants && event.registeredCount >= event.maxParticipants)
+    ) {
+      throw new BadRequestException('Sự kiện đã đủ người');
+    }
+
+    const existing = await this.repo.findOne({ where: { userId, eventId } });
+
+    if (existing) {
+      throw new ConflictException('Đã đăng ký rồi');
+    }
+
     const registration = this.repo.create({
       userId,
       eventId,
@@ -42,6 +74,7 @@ export class RegistrationService {
     });
 
     const savedRegistration = await this.repo.save(registration);
+    await this.eventRepo.increment({ id: eventId }, 'registeredCount', 1);
 
     // Tạo QR code với ID THẬT từ database
     const qrData = JSON.stringify({
@@ -125,7 +158,9 @@ export class RegistrationService {
       relations: ['event'],
     });
 
-    if (!registration) throw new NotFoundException('Không tìm thấy đăng ký');
+    if (!registration) {
+      throw new NotFoundException('Không tìm thấy đăng ký');
+    }
 
     const eventStartDate = new Date(registration.event.startDate);
     const now = new Date();
@@ -139,6 +174,13 @@ export class RegistrationService {
     }
 
     registration.status = 'CANCELLED';
+
+    await this.eventRepo.decrement(
+      { id: registration.eventId },
+      'registeredCount',
+      1,
+    );
+
     return this.repo.save(registration);
   }
 

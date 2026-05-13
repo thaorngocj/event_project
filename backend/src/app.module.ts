@@ -21,6 +21,9 @@ import { StatisticsModule } from './modules/statistics/statistics.module';
       database: process.env.POSTGRES_DB,
       autoLoadEntities: true,
       synchronize: true,
+      extra: {
+        options: '-c TimeZone=Asia/Ho_Chi_Minh',
+      },
     }),
     AuthModule,
     UsersModule,

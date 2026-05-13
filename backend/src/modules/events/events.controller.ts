@@ -70,15 +70,7 @@ export class EventsController {
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: UpdateEventDto) {
-    const updateData: any = { ...body };
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    if (body.startDate) updateData.startDate = new Date(body.startDate);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    if (body.endDate) updateData.endDate = new Date(body.endDate);
-    if (body.registrationDeadline)
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      updateData.registrationDeadline = new Date(body.registrationDeadline);
-    return this.eventsService.update(+id, updateData);
+    return this.eventsService.update(+id, body);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

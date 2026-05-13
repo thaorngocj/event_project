@@ -1,8 +1,7 @@
-// dto/calendar-query.dto.ts  ← MỚI: cho calendar endpoint
 import { IsOptional, IsInt, Min, Max, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
-import { EventCategory } from '../event.entity';
-
+import { EVENT_CATEGORY } from '../../../constants/event.constants';
+import type { EventCategory } from '../../../constants/event.constants';
 export class CalendarQueryDto {
   @IsOptional()
   @Type(() => Number)
@@ -19,6 +18,6 @@ export class CalendarQueryDto {
   month?: number;
 
   @IsOptional()
-  @IsEnum(EventCategory)
+  @IsEnum(EVENT_CATEGORY)
   category?: EventCategory;
 }

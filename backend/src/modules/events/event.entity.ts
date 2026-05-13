@@ -6,40 +6,18 @@ import {
   UpdateDateColumn,
   Index,
 } from 'typeorm';
-
-export enum DisplayCategory {
-  HERO = 'HERO',
-  FEATURED = 'FEATURED',
-  HIGHLIGHT = 'HIGHLIGHT',
-  NORMAL = 'NORMAL',
-}
-
-export enum EventCategory {
-  ACADEMIC = 'ACADEMIC', // Học Thuật - Kỹ năng
-  CULTURE = 'CULTURE', // Văn Hóa - Văn nghệ
-  SPORT = 'SPORT', // Thể thao
-  COMMUNITY = 'COMMUNITY', // Vì Cộng Đồng
-  NATIONAL = 'NATIONAL', // Quốc lễ
-  SCHOOL = 'SCHOOL', // Lễ hội trường
-  SEMINAR = 'SEMINAR', // Diễn đàn - Hội thảo
-}
-
-export enum Scale {
-  UNIT = 'UNIT',
-  SCHOOL = 'SCHOOL',
-  CITY = 'CITY',
-  NATIONAL = 'NATIONAL',
-}
-
-export enum EventStatus {
-  DRAFT = 'DRAFT', // Nháp, chưa public
-  UPCOMING = 'UPCOMING', // Sắp diễn ra
-  OPEN = 'OPEN', // Đang mở đăng ký
-  ONGOING = 'ONGOING', // Đang diễn ra
-  CLOSED = 'CLOSED', // Đã kết thúc
-  CANCELLED = 'CANCELLED', // Bị hủy
-}
-
+import {
+  EVENT_STATUS,
+  EVENT_CATEGORY,
+  DISPLAY_CATEGORY,
+  SCALE,
+} from '../../constants/event.constants';
+import type {
+  DisplayCategory,
+  EventCategory,
+  Scale,
+  EventStatus,
+} from '../../constants/event.constants';
 @Entity('events')
 @Index(['startDate', 'endDate']) // index cho calendar query
 @Index(['eventCategory']) // index cho filter
@@ -48,8 +26,7 @@ export class Event {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  // ── Thông tin cơ bản ──────────────────────────────────────────
-
+  // Thông tin cơ bản
   @Column({ length: 255 })
   title!: string;
 
@@ -59,8 +36,7 @@ export class Event {
   @Column({ length: 500 })
   location!: string;
 
-  // ── Thời gian ──────────────────────────────────────────────────
-
+  // Thời gian
   @Column({ type: 'timestamptz' }) // timestamptz = có timezone
   startDate!: Date;
 
@@ -70,39 +46,33 @@ export class Event {
   @Column({ type: 'timestamptz', nullable: true })
   registrationDeadline?: Date | null; // Hạn đăng ký (≤ startDate)
 
-  // ── Trạng thái ─────────────────────────────────────────────────
-
+  // Trạng thái
   @Column({
-    type: 'enum',
-    enum: EventStatus,
-    default: EventStatus.UPCOMING,
+    type: 'varchar',
+    default: EVENT_STATUS.UPCOMING,
   })
   status!: EventStatus;
 
   @Column({ default: false })
   isCancelled!: boolean; // Soft cancel, giữ data
 
-  // ── Phân loại ──────────────────────────────────────────────────
-
+  // Phân loại
   @Column({
-    type: 'enum',
-    enum: DisplayCategory,
-    default: DisplayCategory.NORMAL,
+    type: 'varchar',
+    default: DISPLAY_CATEGORY.NORMAL,
   })
   displayCategory!: DisplayCategory;
 
   @Column({
-    type: 'enum',
-    enum: EventCategory,
-    default: EventCategory.ACADEMIC,
+    type: 'varchar',
+    default: EVENT_CATEGORY.ACADEMIC,
   })
   eventCategory!: EventCategory;
 
-  @Column({ type: 'enum', enum: Scale, default: Scale.SCHOOL })
+  @Column({ type: 'varchar', default: SCALE.SCHOOL })
   scale!: Scale;
 
-  // ── Đơn vị tổ chức ─────────────────────────────────────────────
-
+  // Đơn vị tổ chức
   @Column({ length: 255, nullable: true })
   faculty?: string; // Khoa tổ chức
 
@@ -115,7 +85,7 @@ export class Event {
   @Column({ length: 20, nullable: true })
   contactPhone?: string;
 
-  // ── Người tham dự ──────────────────────────────────────────────
+  // Người tham dự
 
   @Column({ type: 'int', nullable: true })
   maxParticipants?: number; // null = không giới hạn
@@ -123,7 +93,7 @@ export class Event {
   @Column({ type: 'int', default: 0 })
   registeredCount!: number; // Cache count, sync qua trigger/service
 
-  // ── Media ───────────────────────────────────────────────────────
+  // IMG
 
   @Column({ type: 'text', nullable: true })
   imageUrl?: string;
@@ -131,13 +101,11 @@ export class Event {
   @Column({ type: 'text', nullable: true })
   bannerUrl?: string; // Ảnh banner lớn cho HERO
 
-  // ── Tags & SEO ──────────────────────────────────────────────────
-
+  // Tags & SEO
   @Column({ type: 'simple-array', nullable: true })
   tags?: string[]; // ['BMC', 'khởi nghiệp', 'sinh viên']
 
-  // ── Audit ───────────────────────────────────────────────────────
-
+  // Audit
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 
@@ -147,13 +115,12 @@ export class Event {
   @Column({ type: 'int', nullable: true })
   createdBy?: number; // userId của admin tạo event
 
-  // ── Computed helper (không lưu DB) ──────────────────────────────
-
+  // Computed helper (không lưu DB)
   get isRegistrationOpen(): boolean {
     const now = new Date();
     const deadline = this.registrationDeadline ?? this.startDate;
     return (
-      this.status === EventStatus.UPCOMING &&
+      this.status === EVENT_STATUS.UPCOMING &&
       !this.isCancelled &&
       now < deadline &&
       (this.maxParticipants == null ||

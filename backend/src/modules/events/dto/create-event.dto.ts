@@ -11,11 +11,17 @@ import {
   Min,
 } from 'class-validator';
 import {
-  DisplayCategory,
-  EventCategory,
-  Scale,
+  EVENT_STATUS,
+  EVENT_CATEGORY,
+  DISPLAY_CATEGORY,
+  SCALE,
+} from '../../../constants/event.constants';
+import type {
   EventStatus,
-} from '../event.entity';
+  EventCategory,
+  DisplayCategory,
+  Scale,
+} from '../../../constants/event.constants';
 
 export class CreateEventDto {
   @IsNotEmpty()
@@ -41,19 +47,19 @@ export class CreateEventDto {
   registrationDeadline?: string;
 
   @IsOptional()
-  @IsEnum(EventStatus)
+  @IsEnum(EVENT_STATUS)
   status?: EventStatus;
 
   @IsOptional()
-  @IsEnum(DisplayCategory)
+  @IsEnum(DISPLAY_CATEGORY)
   displayCategory?: DisplayCategory;
 
   @IsOptional()
-  @IsEnum(EventCategory)
+  @IsEnum(EVENT_CATEGORY)
   eventCategory?: EventCategory;
 
   @IsOptional()
-  @IsEnum(Scale)
+  @IsEnum(SCALE)
   scale?: Scale;
 
   @IsOptional()
