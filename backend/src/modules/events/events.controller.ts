@@ -34,8 +34,8 @@ export class EventsController {
   constructor(private eventsService: EventsService) {}
 
   @Get()
-  findAll() {
-    return this.eventsService.findAll();
+  findAll(@Query('page') page = 1, @Query('limit') limit = 20) {
+    return this.eventsService.findAll(+page, +limit);
   }
   @Get('calendar')
   getCalendar(@Query() query: CalendarQueryDto) {
@@ -110,6 +110,14 @@ export class EventsController {
       req.user.id,
       fileName,
     );
+  }
+
+  // Xem danh sách đăng ký của event
+  @Get(':id/registrations')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('EVENT_MANAGER', 'ADMIN', 'SUPER_ADMIN')
+  async getRegistrations(@Param('id') id: string) {
+    return await this.eventsService.getRegistrations(+id);
   }
 
   // Lấy lịch sử import

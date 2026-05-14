@@ -8,6 +8,7 @@ import { UsersModule } from './modules/users/users.module';
 import { EventsModule } from './modules/events/events.module';
 import { RegistrationsModule } from './modules/registrations/registration.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
+import { LoggerModule } from './common/logger/logger.module';
 
 @Module({
   imports: [
@@ -20,11 +21,12 @@ import { StatisticsModule } from './modules/statistics/statistics.module';
       password: process.env.POSTGRES_PASSWORD,
       database: process.env.POSTGRES_DB,
       autoLoadEntities: true,
-      synchronize: true,
+      synchronize: false,
       extra: {
         options: '-c TimeZone=Asia/Ho_Chi_Minh',
       },
     }),
+    LoggerModule,
     AuthModule,
     UsersModule,
     EventsModule,

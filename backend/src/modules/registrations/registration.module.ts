@@ -12,9 +12,4 @@ import { User } from '../users/user.entity';
   controllers: [RegistrationController],
   exports: [RegistrationService],
 })
-export class RegistrationsModule {
-  constructor() {
-    console.log('RegistrationsModule loaded!');
-    console.log('Controllers:', RegistrationController);
-  }
-}
+export class RegistrationsModule {}

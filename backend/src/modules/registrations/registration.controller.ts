@@ -24,10 +24,6 @@ export class RegistrationController {
     @Request() req: { user: { id: number } },
     @Param('eventId') eventId: string,
   ) {
-    console.log('Request user:', req.user);
-    const userId = req.user.id;
-    console.log('User ID:', userId);
-    console.log('Event ID:', eventId);
     return await this.registrationService.register(req.user.id, +eventId);
   }
 
@@ -67,9 +63,8 @@ export class RegistrationController {
   async manualCheckIn(
     @Param('eventId') eventId: string,
     @Body('email') email: string,
-    @Request() req: any,
+    @Request() req: { user: { id: number } },
   ) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
     return this.registrationService.manualCheckIn(+eventId, email, req.user.id);
   }
 }

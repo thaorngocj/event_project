@@ -122,8 +122,20 @@ export class EventsService {
     return this.repo.save(event);
   }
 
-  findAll() {
-    return this.repo.find({ order: { startDate: 'ASC' } });
+  async findAll(page = 1, limit = 20) {
+    const [data, total] = await this.repo.findAndCount({
+      order: { startDate: 'ASC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async findOne(id: number) {
@@ -360,5 +372,24 @@ export class EventsService {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Participants');
     return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+  }
+  async getRegistrations(eventId: number) {
+    await this.findOne(eventId); // kiểm tra event tồn tại
+
+    const registrations = await this.registrationRepo.find({
+      where: { eventId },
+      relations: ['user'],
+      order: { registeredAt: 'DESC' },
+    });
+
+    return registrations.map((reg) => ({
+      id: reg.id,
+      userId: reg.userId,
+      username: reg.user?.username,
+      email: reg.user?.email,
+      status: reg.status,
+      registeredAt: reg.registeredAt,
+      checkedInAt: reg.checkedInAt ?? null,
+    }));
   }
 }

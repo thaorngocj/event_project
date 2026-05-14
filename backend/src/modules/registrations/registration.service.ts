@@ -24,8 +24,6 @@ export class RegistrationService {
   ) {}
 
   async register(userId: number, eventId: number) {
-    console.log('Register service - userId:', userId, 'eventId:', eventId);
-
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
 
     if (!event) {
@@ -111,8 +109,6 @@ export class RegistrationService {
       console.error('Invalid QR data:', error);
       throw new BadRequestException('QR code không hợp lệ');
     }
-
-    console.log('Check-in info:', { registrationId, eventId, userId });
 
     const registration = await this.repo.findOne({
       where: {
